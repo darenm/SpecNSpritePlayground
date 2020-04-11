@@ -1,0 +1,15 @@
+# ignore the downloaded binaries
+project/bin/**
+sdcard/**
+
+# ignore visual studio code local files
+project/.vs/**
+
+# ignore project builds files
+**/*.map
+**/*.nex
+
+# ignore cspect local data
+cspect.log
+cspect_win.dat
+
