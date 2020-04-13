@@ -222,7 +222,7 @@ COPPER_CONTROL_LO_NR_61         equ $61
 COPPER_CONTROL_HI_NR_62         equ $62
 COPPER_DATA_16B_NR_63           equ $63     ; same as $60, but waits for full 16b before write
 ULA_CONTROL_NR_68               equ $68
-DISPLAY_CONTROL_NR_69           equ $69
+DISPLAY_CONTROL_NR_69           equ $69     ; bit 7 enables Layer 2, 6 enables ULA shadow, 5-0 Timex Sinclair Video Control
 LORES_CONTROL_NR_6A             equ $6A
 TILEMAP_CONTROL_NR_6B           equ $6B
 TILEMAP_DEFAULT_ATTR_NR_6C      equ $6C
