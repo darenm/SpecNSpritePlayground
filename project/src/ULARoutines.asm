@@ -203,16 +203,13 @@ LoResPrintSprite:
 ;   bc, a, hl, de
 PrintUdg:
         ; check in bounds
-        ; ld      a, e
-        ; xor     $80
-        ; cp      e
-        ; jr      z, .exit
-        ; jp      m, .exit
-        ; ld      a, 192-7
-        ; xor     $80
-        ; cp      d
-        ; jr      z, .exit
-        ; jp      m, .exit
+        ld      a, 247
+        cp      e
+        jr      c, .exit ; e > a
+
+        ld      a, 180
+        cp      d
+        jr      c, .exit ; e > a
 
         push    hl ; preserve UDG address
         pop     bc ; bc contains UDG address
@@ -256,7 +253,7 @@ PrintUdg:
         jr      nz, .writeTwo
 .writeSingle   
         pop     af     
-        call    WriteScreenByte
+        ld      (hl),a
         pop     hl  ; next row address
         inc     de
         djnz    .screenLoop
@@ -275,7 +272,7 @@ PrintUdg:
 .rotateRightUdg            
             sra     a
             djnz    .rotateRightUdg
-            call    WriteScreenByte
+            ld      (hl),a
             inc     hl ; next cell for udg
 
             ; now determine how far to shift left
@@ -286,7 +283,7 @@ PrintUdg:
 .rotateLeftUdg
             sla     a
             djnz    .rotateLeftUdg
-            call    WriteScreenByte
+            ld      (hl),a
 
         pop     bc ; restore row count
         pop     hl

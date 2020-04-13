@@ -13,7 +13,7 @@
     INCLUDE "constants.i.asm"
 
     DEFINE  DISABLE_INTERRUPTS      ; disable interrupts across app
-    ;DEFINE  DEBUG_BORDERS           ; enable the color stripes in border
+    DEFINE  DEBUG_BORDERS           ; enable the color stripes in border
 
 MAIN_BORDER_COLOR       EQU     1 ;blue
 
