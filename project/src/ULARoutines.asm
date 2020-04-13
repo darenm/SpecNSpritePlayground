@@ -205,11 +205,11 @@ PrintUdg:
         ; check in bounds
         ld      a, 247
         cp      e
-        jr      c, .exit ; e > a
+        jr      c, .exit ; e > 247
 
         ld      a, 180
         cp      d
-        jr      c, .exit ; e > a
+        jr      c, .exit ; d > 180
 
         push    hl ; preserve UDG address
         pop     bc ; bc contains UDG address
@@ -246,16 +246,16 @@ PrintUdg:
         ld      c, a ; if c > 0 then we need to shift
         ld      b, 8
 .screenLoop:
-        ld      a, (de)
-        push    af
+        ld      a, (de) ; a is UDG byte
+        push    af ; store for comparison
         xor     a ; a = 0
-        cp      c
+        cp      c ; if c > 0 then we need two writes
         jr      nz, .writeTwo
 .writeSingle   
-        pop     af     
+        pop     af 
         ld      (hl),a
         pop     hl  ; next row address
-        inc     de
+        inc     de  ; next byte of UDG data
         djnz    .screenLoop
 .exit
         ret
@@ -286,8 +286,8 @@ PrintUdg:
             ld      (hl),a
 
         pop     bc ; restore row count
-        pop     hl
-        inc     de
+        pop     hl ; next row address
+        inc     de ; next byte of UDG data
         djnz    .screenLoop
         ret
 
