@@ -15,6 +15,13 @@
     DEFINE  DISABLE_INTERRUPTS      ; disable interrupts across app
     DEFINE  DEBUG_BORDERS           ; enable the color stripes in border
 
+    STRUCT S_SPRITE_4B_ATTR     ; helper structure to work with 4B sprites attributes
+x       BYTE    0       ; X0:7
+y       BYTE    0       ; Y0:7
+mrx8    BYTE    0       ; PPPP Mx My Rt X8 (pal offset, mirrors, rotation, X8)
+vpat    BYTE    0       ; V 0 NNNNNN (visible, 5B type=off, pattern number 0..63)
+    ENDS
+
 MAIN_BORDER_COLOR       EQU     1 ;blue
 
 ; selecting "Next" as virtual device in assembler, which allows me to set up all banks
@@ -36,7 +43,7 @@ Start:
             di
         ENDIF
 
-        nextreg TURBO_CONTROL_NR_07,2       ; switch to 14MHz as final speed (it's more than enough)
+        ;nextreg TURBO_CONTROL_NR_07,2       ; switch to 14MHz as final speed (it's more than enough)
             ; but makes it somewhat easier on the emulator than max 28MHz mode
 
     ; make the Layer 2 visible and reset some registers (should be reset by NEXLOAD, but to be safe)
@@ -73,6 +80,7 @@ Start:
         nextreg PALETTE_VALUE_NR_41,$E3
         nextreg GLOBAL_TRANSPARENCY_NR_14,$E3
         nextreg TRANSPARENCY_FALLBACK_COL_NR_4A,%000'111'11 ; bright cyan as debug (shouldn't be seen)
+        nextreg SPRITE_TRANSPARENCY_I_NR_4B, 16
 
     ; do the "CLS"
         ld      hl,MEM_ZX_SCREEN_4000
@@ -136,9 +144,83 @@ SetPaletteLoop:
         nextreg PALETTE_VALUE_9BIT_NR_44,a      ; p000'000B p=0 in this image always
         djnz    SetPaletteLoop
 
+        ;call UploadSprites
+
+UploadSprites:
+    ; SpecBong sprite gfx does use the default palette: color[i] = convert8bitColorTo9bit(i);
+    ; which is set by the NEX loader in the first sprite palette
+        ; nothing to do here in the code with sprite palette
+
+    ; upload the sprite gfx patterns to patterns memory (from regular memory - loaded by NEX loader)
+        ; preconfigure the Next for uploading patterns from slot 0
+        ld      bc,SPRITE_STATUS_SLOT_SELECT_P_303B
+        xor     a
+        out     (c),a       ; select slot 0 for patterns (selects also index 0 for attributes)
+        ; we will map full 16kiB to memory region $C000..$FFFF (to pages 25,26 with sprite pixels)
+        nextreg MMU6_C000_NR_56,$$SpritePixelData   ; C000..DFFF <- 8k page 25
+        nextreg MMU7_E000_NR_57,$$SpritePixelData+1 ; E000..FFFF <- 8k page 26
+        ld      hl,SpritePixelData      ; HL = $C000 (beginning of the sprite pixels)
+        ld      bc,SPRITE_PATTERN_P_5B  ; sprite pattern-upload I/O port, B=0 (inner loop counter)
+        ld      a,64                    ; 64 patterns (outer loop counter), each pattern is 256 bytes long
+UploadSpritePatternsLoop:
+        ; upload 256 bytes of pattern data (otir increments HL and decrements B until zero)
+        otir                            ; B=0 ahead, so otir will repeat 256x ("dec b" wraps 0 to 255)
+        dec     a
+        jr      nz,UploadSpritePatternsLoop ; do 64 patterns
+
+; create in memory record of sprite positions?
+        ; init them at some debug positions, they will for part 3 just fly around mindlessly
+        ld      ix,SprSnowballs         ; IX = address of first snowball sprite
+        ld      b,32                    ; define 32 of them
+        ld      hl,0                    ; HL will generate X positions
+        ld      e,32                    ; E will generate Y positions
+        ld      d,$80 + 13              ; visible sprite + snowball pattern (52, second is 53)
+InitBallsLoop:
+        ; set current ball data
+        ld      (ix+S_SPRITE_4B_ATTR.x),l
+        ld      (ix+S_SPRITE_4B_ATTR.y),e
+        ld      (ix+S_SPRITE_4B_ATTR.mrx8),h    ; clear pal offset, mirrors, rotate, set x8
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),d
+        ; adjust initial position and pattern for next ball
+        add     hl,13                   ; 13*32 = 416: will produce X coordinates 0..511 range only
+        ld      a,e
+        add     a,5
+        ld      e,a                     ; 5*32 = 160 pixel spread vertically
+        ld      a,d
+        ;xor     1                       ; alternate snowball patterns between 52/53
+        ld      d,a
+        ; advance IX to point to next snowball
+        push    de
+        ld      de,S_SPRITE_4B_ATTR
+        add     ix,de
+        pop     de
+        djnz    InitBallsLoop
+        ; init player at debug position
+        ld      ix,SprPlayer
+        ld      (ix+S_SPRITE_4B_ATTR.x),32+16   ; near left of paper area
+        ld      (ix+S_SPRITE_4B_ATTR.y),206     ; near bottom of paper area
+        ld      (ix+S_SPRITE_4B_ATTR.mrx8),0    ; clear pal offset, mirrors, rotate, x8
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),$80 + 1  ; pattern "2" (player
+
 .mainLoop:
        
         call    WaitForScanlineUnderUla
+
+        IFDEF DEBUG_BORDERS             ; red border: to measure the sprite upload time by tallness of the border stripe
+            ld      a,2
+            out     (ULA_P_FE),a
+        ENDIF
+
+    ; upload sprite data from memory array to the actual HW sprite engine
+        ; reset sprite index for upload
+        ld      bc,SPRITE_STATUS_SLOT_SELECT_P_303B
+        xor     a
+        out     (c),a       ; select slot 0 for sprite attributes
+        ld      hl,Sprites
+        ld      bc,SPRITE_ATTRIBUTE_P_57       ; B = 0 (repeat 256x), C = sprite pattern-upload I/O port
+        ; out 512 bytes in total (whole sprites buffer)
+        otir
+        otir
 
         IFDEF DEBUG_BORDERS 
             ; magenda border: to measure clear screen performance
@@ -146,33 +228,18 @@ SetPaletteLoop:
             out     (ULA_P_FE),a
         ENDIF
 
-        call ZxFastClearScreen
-
+        ;call ZxFastClearScreen
+            ; adjust sprite attributes in memory pointlessly (in debug way) just to see some movement
+        call    SnowballsAI
+ 
         IFDEF DEBUG_BORDERS
             ; green border: to measure the player rendering
             ld      a,GREEN
             out     (ULA_P_FE),a
         ENDIF 
  
-        ld      hl, InvaderPos1
-        call    printInvader
-        ld      hl, InvaderPos2
-        call    printInvader
-        ld      hl, InvaderPos3
-        call    printInvader
-        ld      hl, InvaderPos4
-        call    printInvader
-        ld      hl, InvaderPos5
-        call    printInvader
-        ld      hl, InvaderPos6
-        call    printInvader
-        ld      hl, InvaderPos7
-        call    printInvader
-        ld      hl, InvaderPos8
-        call    printInvader
-        ld      hl, InvaderPos9
-        call    printInvader
-        
+        call    ReadInputDevices
+        call    Player1MoveByControls     
 
         IFDEF DEBUG_BORDERS
             ; red border: to measure the scrolling
@@ -181,54 +248,144 @@ SetPaletteLoop:
         ENDIF
 
         ; Scroll the background - wow very easy
-        ld hl,  XScrollPos
-        ld a,   (hl)
-        inc     a
-        ld      (hl), a
-        nextreg LAYER2_XOFFSET_NR_16, a 
+        ; ld hl,  XScrollPos
+        ; ld a,   (hl)
+        ; inc     a
+        ; ld      (hl), a
+        ; nextreg LAYER2_XOFFSET_NR_16, a 
 
     ; loop forever
         jr      .mainLoop
 
-WaitForScanlineUnderUla:
-        ; because I decided early to not use interrupts to keep the code a bit simpler
-        ; (simpler to follow in mind, not having to expect any interrupt everywhere)
-        ; we will be syncing the main game loop by waiting for particular scanline
-        ; (just under the ULA paper area, i.e. scanline 192)
-    ; update the TotalFrames counter by +1
-        ld      hl,(TotalFrames)
+    ;-------------------------------------------------------------------------------------
+    ; "AI" subroutines
+
+Player1MoveByControls:
+    ; update "cooldown" of fire button to allow it only once per 10 frames
+        ld      a,(Player1FireCoolDown)
+        sub     1           ; SUB to update also carry flag
+        adc     a,0         ; clamp the value to 0 to not go -1
+        ld      (Player1FireCoolDown),a
+    ; just DEBUG: up/down/left/right over whole screen, fire changing animation frame
+        ld      ix,SprPlayer
+        ld      a,(Player1Controls)
+        ld      b,a         ; keep control bits around in B for simplicity
+        ; HL = current X coordinate (9 bit)
+        ld      l,(ix+S_SPRITE_4B_ATTR.x)
+        ld      h,(ix+S_SPRITE_4B_ATTR.mrx8)
+        ld      c,h         ; preserve current mirrorX
+        bit     JOY_BIT_RIGHT,b
+        jr      z,.notGoingRight
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),$80+0
         inc     hl
-        ld      (TotalFrames),hl
-        IFDEF DEBUG_BORDERS
-            ; turn the border to the "main" color during wait
-            ld      a,MAIN_BORDER_COLOR
-            out     (ULA_P_FE),a
-        ENDIF
-        ; if HL=0, increment upper 16bit too
+        inc     hl          ; X += 2
+        res     3,c         ; mirrorX=0 (face right)
+.notGoingRight:
+        bit     JOY_BIT_LEFT,b
+        jr      z,.notGoingLeft
+        dec     hl
+        dec     hl          ; X -= 2
+        set     3,c         ; mirrorX=1 (face left)
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),$80+0
+.notGoingLeft:
+        ; sanitize HL to values range 32..271 (16px sprite fully visible in PAPER area)
+        ld      de,32
+        ; first clear top bits of H to keep only "x8" bit of it (remove mirrors/rot/pal data)
+        rr      h           ; Fcarry = x8
+        ld      h,0
+        rl      h           ; x8 back to H, Fcarry=0 (for sbc)
+        sbc     hl,de
+        add     hl,de       ; Fc=1 when HL is 0..31
+        jr      nc,.XposIs32plus
+        ex      de,hl       ; for 0..31 reset the Xpos=HL=32
+.XposIs32plus:
+        ld      de,32+256-16    ; 272 - first position when sprite has one px in border
+        or      a           ; Fc=0
+        sbc     hl,de
+        add     hl,de       ; Fc=1 when HL is 32..271
+        jr      c,.XposIsValid
+        ex      de,hl
+        dec     hl          ; for 272+ reset the Xpos=HL=271
+.XposIsValid:
+        ; store the sanitized X post and new mirrorX to player sprite values
+        ld      a,c
+        and     ~1          ; clear x8 bit (preserves only mirror/rotate/...)
+        or      h           ; merge x8 back
+        ld      (ix+S_SPRITE_4B_ATTR.x),l
+        ld      (ix+S_SPRITE_4B_ATTR.mrx8),a
+        ; vertical movement
+        ld      a,(ix+S_SPRITE_4B_ATTR.y)
+
+        bit     JOY_BIT_UP,b
+        jr      z,.notGoingUp
+        dec     a
+        dec     a           ; Y -= 2
+        cp      32          ; sanitize right here
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),$80+2
+        jr      nc,.notGoingUp
+        ld      a,32        ; 0..31 -> Y=32
+
+
+.notGoingUp:
+        bit     JOY_BIT_DOWN,b
+        jr      z,.notGoingDown
+        inc     a
+        inc     a           ; Y += 2
+        cp      32+192-16   ; sanitize right here (208+ is outside of PAPER area)
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),$80+1
+        jr      c,.notGoingDown
+        ld      a,32+192-16-1   ; 208..255 -> Y=207
+
+.notGoingDown:
+        ld      (ix+S_SPRITE_4B_ATTR.y),a
+        ; change through all 64 sprite patterns when pressing fire
+        bit     JOY_BIT_FIRE,b
+        ret     z           ; Player1 movement done - no fire button
+        ld      a,(Player1FireCoolDown)
+        or      a
+        ret     nz          ; check "cooldown" of fire, ignore button if still cooling down
+        ld      a,10
+        ld      (Player1FireCoolDown),a     ; set new "cooldown" if pattern will change
+        ; ld      a,(ix+S_SPRITE_4B_ATTR.vpat)
+        ; inc     a
+        ; and     ~64         ; force the pattern to stay 0..63 and keep +128 for "visible"
+        ; ld      (ix+S_SPRITE_4B_ATTR.vpat),a
+        ;ld      (ix+S_SPRITE_4B_ATTR.vpat),2
+        ret
+
+SnowballsAI:
+        ld      ix,SprSnowballs
+        ld      de,S_SPRITE_4B_ATTR
+        ld      b,32
+.loop:
+        ; HL = current X coordinate (9 bit)
+        ld      l,(ix+S_SPRITE_4B_ATTR.x)
+        ld      h,(ix+S_SPRITE_4B_ATTR.mrx8)
+        ; adjust it by some +- value deducted from B (32..1 index)
+        ld      c,0         ; mirrorX flag = 0
+        ld      a,b
+        and     3           ; A = 0,1,2,3
+        sli     a           ; A = 1, 3, 5, 7
+        sub     4           ; A = -3, -1, +1, +3
+        ; do: HL += signed(A) (the "add hl,a" is "unsigned", so extra jump+adjust needed)
+        jr      nc,.moveRight
+        dec     h
+        ld      c,$08       ; mirrorX flag = 1
+.moveRight:
+        add     hl,a
+        ; put H and C together to work as palette_offset/mirror/rotate bits with X8 bit
         ld      a,h
-        or      l
-        jr      nz,.totalFramesUpdated
-        ld      hl,(TotalFrames+2)
-        inc     hl
-        ld      (TotalFrames+2),hl
-.totalFramesUpdated:
-    ; read NextReg $1F - LSB of current raster line
-        ld      bc,TBBLUE_REGISTER_SELECT_P_243B
-        ld      a,RASTER_LINE_LSB_NR_1F
-        out     (c),a       ; select NextReg $1F
-        inc     b           ; BC = TBBLUE_REGISTER_ACCESS_P_253B
-    ; if already at scanline 192, then wait extra whole frame (for super-fast game loops)
-.cantStartAt192:
-        in      a,(c)       ; read the raster line LSB
-        cp      192
-        jr      z,.cantStartAt192
-    ; if not yet at scanline 192, wait for it ... wait for it ...
-.waitLoop:
-        in      a,(c)       ; read the raster line LSB
-        cp      192
-        jr      nz,.waitLoop
-    ; and because the max scanline number is between 260..319 (depends on video mode),
-    ; I don't need to read MSB. 256+192 = 448 -> such scanline is not part of any mode.
+        and     1           ; keep only "x8" bit
+        or      c           ; add desired mirrorX bit
+        ; store the new X coordinate and mirror/rotation flags
+        ld      (ix+S_SPRITE_4B_ATTR.x),l
+        ld      (ix+S_SPRITE_4B_ATTR.mrx8),a
+        ; alternate pattern between 52 and 53
+        ld      a,(ix+S_SPRITE_4B_ATTR.vpat)
+        ;xor     1
+        ld      (ix+S_SPRITE_4B_ATTR.vpat),a
+        add     ix,de       ; next snowball
+        djnz    .loop       ; do 32 of them
         ret
 
 ;---------------------------------------
@@ -252,6 +409,7 @@ printInvader:
 ;---------------------------------------------------------------------
         include "Utils.asm"
         include "ULARoutines.asm" 
+        include "Layer2Routines.asm"
 
 ;---------------------------------------------------------------------
 ; Data Area
@@ -306,8 +464,34 @@ InvaderPos9:
 XScrollPos:
         db 0
 
+SpritePos:
+        db $20, $20
+
 TotalFrames:                ; count frames for purposes of slower animations/etc
         dword      0
+
+    ; bits encoding inputs as Kempston/MD: https://wiki.specnext.dev/Kempston_Joystick
+Player1Controls:
+        DB      0
+Player1FireCoolDown:
+        DB      0
+
+                ; reserve full 128 sprites 4B type (this demo will not use 5B type sprites)
+        ALIGN   256                     ; aligned at 256B boundary w/o particular reason (yet)
+Sprites:
+        DS      128 * S_SPRITE_4B_ATTR, 0
+            ; "S_SPRITE_4B_ATTR" works as "sizeof(STRUCT), in this case it equals to 4
+
+        ; the later sprites are drawn above the earlier, current allocation:
+            ; SNOWBALLS_CNT will be used for snowballs
+            ; next sprite for player
+            ; then max SNOWBALLS_CNT are for collision sparks (will render above player) (FX sprite)
+        ; the later sprites are drawn above the earlier, so for Part 3 the sprites
+        ; 0..31 will be used for snowballs, and sprite 32 for player
+        ; adding symbols to point inside the memory reserved above
+SprPlayer:      EQU     Sprites + 0*S_SPRITE_4B_ATTR   ; player sprite is here
+SprSnowballs:   EQU     Sprites + 1*S_SPRITE_4B_ATTR    ; first snowball sprite at this address
+
 
 ;;
 ;; Set up the Nex output
@@ -320,13 +504,12 @@ TotalFrames:                ; count frames for purposes of slower animations/etc
         ; now include the binary pixel data from the TGA file at the $E000 address
         ORG $E000
         INCBIN "../data/Background1.tga", 0x12 + 3*256, 256*192
-        ;INCBIN "../data/SpecBong.tga", 0x12 + 3*256, 256*192
+
     ; palette of image (will land to page 24, first free byte after pixel data)
         ; verify the assumption that the palette starts where expected (page 24, $E000)
         ASSERT $ == $E000 && $$ == 24
 BackGroundPalette:
         INCBIN "../data/Background1.tga", 0x12, 3*256  ; 768 bytes of palette data
-        ;INCBIN "../data/SpecBong.tga", 0x12, 3*256  ; 768 bytes of palette data
 
     ; sprite pixel data from the raw binary file SBsprite.spr, aligned to next
     ; page after palette data (8k page 25), it will occupy two pages: 25, 26

@@ -63,6 +63,13 @@ KEMPSTON_MOUSE_B_P_FADF         equ $FADF   ; kempston mouse wheel+buttons
 KEMPSTON_JOY1_P_1F              equ $1F
 KEMPSTON_JOY2_P_37              equ $37
 
+;-----------------------------------------------------------------------
+JOY_BIT_RIGHT           EQU     0
+JOY_BIT_LEFT            EQU     1
+JOY_BIT_DOWN            EQU     2
+JOY_BIT_UP              EQU     3
+JOY_BIT_FIRE            EQU     4
+
 ;-----------------------------------------------------------------------------
 ;-- I/O ports - ZX Spectrum NEXT specific ports
 

@@ -4,8 +4,8 @@
 Remove-Item $PSScriptRoot\*.zip 
 
 Write-Host "Download and expand the CSpect image from ZXSpectrumNEXT" -ForegroundColor Green
-c:\windows\system32\curl -o $PSScriptRoot\CSpect2_12_13.zip http://www.javalemmings.com/public/zxnext/CSpect2_12_13.zip
-Expand-Archive -force $PSScriptRoot\CSpect2_12_13.zip $PSScriptRoot
+c:\windows\system32\curl -o $PSScriptRoot\CSpect2_12_20.zip http://www.javalemmings.com/public/zxnext/CSpect2_12_20.zip
+Expand-Archive -force $PSScriptRoot\CSpect2_12_20.zip $PSScriptRoot
 
 Write-Host "Download the Opena file and expand it" -ForegroundColor Green
 c:\windows\system32\curl -o $PSScriptRoot\openal.dll http://www.zxspectrumnext.online/cspect/openal.zip
