@@ -32,7 +32,7 @@
         {
             "label": "Launch CSpect",
             "type": "shell",
-            "command": "${workspaceRoot}\\project\\bin\\CSpect.exe -r -tv -brk -w4 -basickeys -zxnext -nextrom -map=${workspaceRoot}\\project.map -mmc=${workspaceRoot}\\sdcard\\cspect-next-2gb.img project.nex",
+            "command": "${workspaceRoot}\\project\\bin\\CSpect.exe -w4 -r -s14 -tv -brk -vsync -sound -60 -basickeys -zxnext -nextrom -map=${workspaceRoot}\\project.map -mmc=${workspaceRoot}\\sdcard\\cspect-next-2gb.img project.nex",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Compile Assembly",

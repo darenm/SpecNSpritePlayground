@@ -171,9 +171,9 @@ UploadSpritePatternsLoop:
 ; create in memory record of sprite positions?
         ; init them at some debug positions, they will for part 3 just fly around mindlessly
         ld      ix,SprSnowballs         ; IX = address of first snowball sprite
-        ld      b,32                    ; define 32 of them
+        ld      b,128                    ; define 32 of them
         ld      hl,0                    ; HL will generate X positions
-        ld      e,32                    ; E will generate Y positions
+        ld      e,128                    ; E will generate Y positions
         ld      d,$80 + 13              ; visible sprite + snowball pattern (52, second is 53)
 InitBallsLoop:
         ; set current ball data
@@ -221,6 +221,7 @@ InitBallsLoop:
         ; out 512 bytes in total (whole sprites buffer)
         otir
         otir
+        otir
 
         IFDEF DEBUG_BORDERS 
             ; magenda border: to measure clear screen performance
@@ -248,11 +249,11 @@ InitBallsLoop:
         ENDIF
 
         ; Scroll the background - wow very easy
-        ; ld hl,  XScrollPos
-        ; ld a,   (hl)
-        ; inc     a
-        ; ld      (hl), a
-        ; nextreg LAYER2_XOFFSET_NR_16, a 
+        ld hl,  XScrollPos
+        ld a,   (hl)
+        inc     a
+        ld      (hl), a
+        nextreg LAYER2_XOFFSET_NR_16, a 
 
     ; loop forever
         jr      .mainLoop
@@ -356,7 +357,7 @@ Player1MoveByControls:
 SnowballsAI:
         ld      ix,SprSnowballs
         ld      de,S_SPRITE_4B_ATTR
-        ld      b,32
+        ld      b,128
 .loop:
         ; HL = current X coordinate (9 bit)
         ld      l,(ix+S_SPRITE_4B_ATTR.x)
@@ -489,8 +490,8 @@ Sprites:
         ; the later sprites are drawn above the earlier, so for Part 3 the sprites
         ; 0..31 will be used for snowballs, and sprite 32 for player
         ; adding symbols to point inside the memory reserved above
-SprPlayer:      EQU     Sprites + 0*S_SPRITE_4B_ATTR   ; player sprite is here
-SprSnowballs:   EQU     Sprites + 1*S_SPRITE_4B_ATTR    ; first snowball sprite at this address
+SprSnowballs:   EQU     Sprites + 0*S_SPRITE_4B_ATTR    ; first snowball sprite at this address
+SprPlayer:      EQU     Sprites + 128*S_SPRITE_4B_ATTR   ; player sprite is here
 
 
 ;;
