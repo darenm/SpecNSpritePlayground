@@ -3,10 +3,11 @@
     // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [
+        
         {
             "label": "Compile Assembly",
             "type": "shell",
-            "command": "${workspaceRoot}\\project\\bin\\sjasmplus ${file} --zxnext=cspect --msg=all --fullpath",
+            "command": "${workspaceRoot}\\project\\bin\\sjasmplus ${file} --zxnext=cspect --msg=all --fullpath --lst",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -14,9 +15,16 @@
             "presentation": {
                 "reveal": "always",
             },
-            "problemMatcher": [
-                "$errmatcher-sjasmplus"
-            ]
+            "problemMatcher": {
+                "fileLocation": "autoDetect",
+                "pattern": {
+                    "regexp": "^(.*)\\(([0-9]+)\\): (error|warning):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "severity": 3,
+                    "message": 4
+                }
+            }
         },
         {
             "label": "Update SDCard",
@@ -24,21 +32,17 @@
             "command": "${workspaceRoot}\\project\\bin\\hdfmonkey put ${workspaceRoot}\\sdcard\\cspect-next-2gb.img project.nex",
             "presentation": {
                 "reveal": "always",
-            },
-            "problemMatcher": [
-                "$errmatcher-sjasmplus"
-            ]
+            }
         },
         {
             "label": "Launch CSpect",
             "type": "shell",
-            "command": "${workspaceRoot}\\project\\bin\\CSpect.exe -w4 -r -s14 -tv -brk -vsync -sound -60 -basickeys -zxnext -nextrom -map=${workspaceRoot}\\project.map -mmc=${workspaceRoot}\\sdcard\\cspect-next-2gb.img project.nex",
+            "command": "${workspaceRoot}\\project\\bin\\CSpect.exe -w4 -r -s14 -esc -brk -basickeys -zxnext -nextrom -map=${workspaceRoot}\\project.map -mmc=${workspaceRoot}\\sdcard\\cspect-next-2gb.img",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Compile Assembly",
                 "Update SDCard"
-            ],
-            "problemMatcher": []
+            ]
         }
     ]
 }
